@@ -1,9 +1,9 @@
 # Test-Time Adaptation, Live: State vs. Weights
-**DataForge 2026 × Pathway Track — Team NEXORA**
+**DataForge 2026 × Pathway Track — Team Versetify**
 
 Live artifact: `index.html` (open directly in any browser, no build step, no sign-in, no network calls).
 
-- **Public artifact URL:** https://pratiushpaliwal.github.io/Versetify-tta/
+- **Public artifact URL:** [https://pratiushpaliwal.github.io/Versetify-tta/](https://versetify.vercel.app/)
 - **Public source code repository:** https://github.com/pratiushpaliwal/Versetify-tta
 
 ## Deployment
