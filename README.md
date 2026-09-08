@@ -3,7 +3,7 @@
 
 Live artifact: `index.html` (open directly in any browser, no build step, no sign-in, no network calls).
 
-- **Public artifact URL:** [https://pratiushpaliwal.github.io/Versetify-tta/](https://versetify.vercel.app/)
+- **Public artifact URL:** [[https://pratiushpaliwal.github.io/Versetify-tta/](https://versetify.vercel.app/)](https://versetify.vercel.app/)
 - **Public source code repository:** https://github.com/pratiushpaliwal/Versetify-tta
 
 ## Deployment
