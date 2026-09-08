@@ -6,12 +6,6 @@ Live artifact: `index.html` (open directly in any browser, no build step, no sig
 - **Public artifact URL:** [[https://pratiushpaliwal.github.io/Versetify-tta/](https://versetify.vercel.app/)]
 - **Public source code repository:** https://github.com/pratiushpaliwal/Versetify-tta
 
-## Deployment
-
-1. **Repo:** create a new public GitHub repository, upload every file in this folder (drag-and-drop works on github.com — no git command line needed). Copy the repo's URL.
-2. **Live URL:** in that repo, go to **Settings → Pages**, under "Build and deployment" set **Source: Deploy from a branch**, branch **main**, folder **/ (root)**, then **Save**. GitHub gives you a URL like `https://<username>.github.io/<repo-name>/` within a minute or two — that opens `index.html` automatically without sign-in.
-3. Come back to this README and replace the two placeholder lines above with the real links.
-
 ## The one-sentence claim
 
 > A system can acquire a new input→output rule from a handful of demonstrations by **additively accumulating a bounded matrix of state** at inference time — zero gradient steps, zero backward passes — and this works well until the number of distinct patterns it must hold exceeds the dimensionality of that state, at which point recall degrades through cross-talk, not through "running out of layers."
