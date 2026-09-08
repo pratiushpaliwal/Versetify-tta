@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test-Time Adaptation, Live — State vs. Weights</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171b2e; --panel2:#1e2338; --ink:#eef0f8; --muted:#9aa1c2;
+    --accent:#7c6cf0; --accent2:#39d6b0; --bad:#f0577c; --good:#39d6b0; --warn:#f0b24a;
+    --border:#2b3050;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5;}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 80px;}
+  header{padding:28px 0 10px;}
+  h1{font-size:1.5rem;margin:0 0 6px;letter-spacing:-0.01em;}
+  .sub{color:var(--muted);font-size:0.95rem;margin-bottom:16px;}
+  .claim{background:linear-gradient(135deg,#241f45,#182238);border:1px solid var(--border);border-radius:14px;padding:16px 18px;font-size:1.02rem;}
+  .claim b{color:var(--accent2);}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 22px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:10;}
+  nav button{background:var(--panel);color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:8px 14px;font-size:0.82rem;cursor:pointer;transition:.15s;}
+  nav button.active{background:var(--accent);color:white;border-color:var(--accent);}
+  section{display:none;animation:fade .25s ease;}
+  section.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{font-size:1.05rem;margin:0 0 8px;}
+  .card h3{font-size:0.92rem;margin:14px 0 6px;color:var(--accent2);}
+  .row{display:flex;gap:16px;flex-wrap:wrap;}
+  .col{flex:1 1 260px;min-width:240px;}
+  label{display:block;font-size:0.8rem;color:var(--muted);margin:10px 0 4px;}
+  input[type=range]{width:100%;accent-color:var(--accent);}
+  select,button.btn{background:var(--panel2);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.85rem;}
+  button.btn{cursor:pointer;background:var(--accent);border-color:var(--accent);color:white;font-weight:600;}
+  button.btn.secondary{background:var(--panel2);color:var(--ink);}
+  button.btn:hover{filter:brightness(1.08);}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:2px 10px;font-size:0.75rem;color:var(--muted);}
+  .statline{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0;}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:120px;}
+  .stat .n{font-size:1.35rem;font-weight:700;}
+  .stat .l{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .grid-vis{display:grid;grid-template-columns:repeat(4,32px);gap:4px;margin:8px 0;}
+  .cell{width:32px;height:32px;border-radius:6px;border:2px solid transparent;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#00000099;font-weight:700;}
+  .cell.wrong{border-color:var(--bad);}
+  .cell.right{border-color:var(--good);}
+  .grids{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;}
+  .gridblock .cap{font-size:0.72rem;color:var(--muted);margin-bottom:4px;}
+  svg.chart{background:var(--panel2);border-radius:10px;border:1px solid var(--border);}
+  .legend{font-size:0.72rem;color:var(--muted);margin-top:6px;}
+  .note{background:#241a2c;border:1px solid #4a2b52;border-radius:10px;padding:10px 14px;font-size:0.85rem;color:#f0c7e0;margin-top:10px;}
+  .warn-box{background:#2c2412;border:1px solid #5a4a1c;border-radius:10px;padding:10px 14px;font-size:0.85rem;color:#f0d98a;margin-top:10px;}
+  .good-box{background:#122c22;border:1px solid #1c5a41;border-radius:10px;padding:10px 14px;font-size:0.85rem;color:#8af0c4;margin-top:10px;}
+  code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:0.85em;}
+  textarea{width:100%;min-height:90px;background:var(--panel2);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:inherit;font-size:0.9rem;}
+  table{width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:8px;}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:600;font-size:0.75rem;text-transform:uppercase;}
+  a{color:var(--accent2);}
+  .flag{font-size:0.68rem;padding:1px 7px;border-radius:6px;font-weight:700;letter-spacing:.03em;}
+  .flag.live{background:#123a2c;color:#5ff0b0;}
+  .flag.reported{background:#3a2a12;color:#f0b45a;}
+  .flag.toy{background:#2a1a3a;color:#c39bf0;}
+  footer{color:var(--muted);font-size:0.78rem;margin-top:30px;border-top:1px solid var(--border);padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Test-Time Adaptation, Live: State vs. Weights</h1>
+    <div class="sub">An interactive explainer for the DataForge 2026 × Pathway track. Audience: ML students/engineers who know what a matrix multiply and a gradient step are, but have not yet seen fast-weight / Hebbian memory. Prerequisites: linear algebra basics, one pass of gradient descent.</div>
+    <div class="claim">
+      <b>The one-sentence claim:</b> a system can acquire a new input→output rule from a handful of demonstrations by <b>additively accumulating a bounded matrix of state</b> at inference time — zero gradient steps, zero backward passes — and this works well until the number of distinct patterns it must hold exceeds the dimensionality of that state, at which point recall degrades through cross-talk, not through "running out of layers."
+    </div>
+  </header>
+
+  <nav>
+    <button data-tab="t1" class="active">1 · Live fast-weight memory</button>
+    <button data-tab="t2">2 · Capacity limit</button>
+    <button data-tab="t3">3 · Optimization contrast</button>
+    <button data-tab="t4">4 · BDH / BDH-CQ module</button>
+    <button data-tab="t5">5 · Explain it back</button>
+    <button data-tab="t6">6 · Limitations &amp; sources</button>
+  </nav>
+
+  <!-- TAB 1 -->
+  <section id="t1" class="active">
+    <div class="card">
+      <h2>Step through it: learn a rule with no gradient at all <span class="flag live">LIVE COMPUTATION</span></h2>
+      <p style="color:var(--muted);font-size:0.88rem">A small "world" of <code>K</code> colors lives in <code>D</code>-dimensional vectors. A hidden rule <b>π</b> maps every color to another color (e.g. red→blue). You are shown <code>M</code> demonstration pairs of (color → π(color)). Instead of training a network, the system keeps one matrix <b>W</b> and, for every demonstration, adds the outer product <code>W += v·kᵀ</code>. That's the entire "learning" step — literally one line of addition per example, repeated. This is the additive, per-demonstration state update that BDH-CQ's contextual memory generalizes (see Tab 4).</p>
+
+      <div class="row">
+        <div class="col">
+          <label>Number of colors in the world, K (2–10)</label>
+          <input type="range" id="kSlider" min="2" max="10" value="4">
+          <div class="pill" id="kVal">K = 4</div>
+
+          <label>Vector dimension, D (2–10)</label>
+          <input type="range" id="dSlider" min="2" max="10" value="4">
+          <div class="pill" id="dVal">D = 4</div>
+
+          <label>Demonstration coverage, M (how many of the K colors you get shown)</label>
+          <input type="range" id="mSlider" min="1" max="10" value="4">
+          <div class="pill" id="mVal">M = 4 of 4</div>
+
+          <label>Rule π</label>
+          <select id="ruleSelect">
+            <option value="cyclic">Cyclic shift (color i → color i+1)</option>
+            <option value="swap01">Swap first two, fix the rest</option>
+            <option value="reverse">Reverse order</option>
+            <option value="random">Random fixed permutation</option>
+          </select>
+        </div>
+        <div class="col">
+          <button class="btn" id="learnBtn">▶ Learn from demonstrations (accumulate W)</button>
+          <button class="btn secondary" id="testBtn">Generate new test grid</button>
+          <button class="btn secondary" id="resetBtn">Reshuffle keys (new seed)</button>
+          <div class="statline">
+            <div class="stat"><div class="n" id="stepCount">0</div><div class="l">outer-product adds</div></div>
+            <div class="stat"><div class="n" id="accStat">–</div><div class="l">test-grid accuracy</div></div>
+          </div>
+          <div id="learnLog" class="legend"></div>
+        </div>
+      </div>
+
+      <h3>Visible state: the accumulated matrix W (D×D)</h3>
+      <div id="matrixVis"></div>
+
+      <h3>Truth beside estimate</h3>
+      <div class="grids">
+        <div class="gridblock"><div class="cap">Input grid (unseen instance)</div><div class="grid-vis" id="gridIn"></div></div>
+        <div class="gridblock"><div class="cap">System's prediction (retrieved via W)</div><div class="grid-vis" id="gridPred"></div></div>
+        <div class="gridblock"><div class="cap">Ground truth (π applied directly)</div><div class="grid-vis" id="gridTruth"></div></div>
+      </div>
+      <div class="legend">Cell border: <span style="color:var(--good)">green = correct</span>, <span style="color:var(--bad)">red = wrong</span>. Numbers are color indices, colored by the color they represent.</div>
+    </div>
+  </section>
+
+  <!-- TAB 2 -->
+  <section id="t2">
+    <div class="card">
+      <h2>The limitation: capacity is bounded by D <span class="flag live">LIVE COMPUTATION</span></h2>
+      <p style="color:var(--muted);font-size:0.88rem">A linear associative memory built from outer products can store as many <i>orthogonal</i> patterns as it has dimensions. Push more distinct colors K into a fixed dimension D and the key vectors stop being separable — retrieval starts confusing colors that were never confused when K ≤ D. This is a textbook property of Hebbian / fast-weight memories (Schlag &amp; Schmidhuber's "fast weight programmers" line of work; also the "special case" BDH-CQ's paper describes for additive per-demonstration state, see Tab 4) — <b>not</b> a bug, and not something more training data fixes, because there is no training here.</p>
+      <div class="row">
+        <div class="col">
+          <label>Fixed dimension for the sweep, D</label>
+          <input type="range" id="dSweep" min="2" max="8" value="4">
+          <div class="pill" id="dSweepVal">D = 4</div>
+          <button class="btn" id="sweepBtn" style="margin-top:12px">Run capacity sweep (30 random trials per K)</button>
+        </div>
+        <div class="col">
+          <div class="legend">Sweeps K = D → 3×D at full coverage (M = K), using freshly sampled random keys each trial, and reports mean top-1 retrieval accuracy.</div>
+        </div>
+      </div>
+      <svg class="chart" id="sweepChart" width="880" height="220" viewBox="0 0 880 220"></svg>
+      <div class="warn-box"><b>Common misconception:</b> "the system just needs more demonstrations." More demonstrations don't help once K &gt; D — every color is already being taught, the problem is that D-dimensional space can't keep K non-orthogonal directions apart. The fix in real systems is a bigger state (more dimensions / more attention heads), which is exactly why architectures care about state width, not just depth.</div>
+    </div>
+  </section>
+
+  <!-- TAB 3 -->
+  <section id="t3">
+    <div class="card">
+      <h2>Contrast: the optimization route <span class="flag live">LIVE COMPUTATION</span></h2>
+      <p style="color:var(--muted);font-size:0.88rem">Here the exact same task (recover π from M demonstrations, evaluate on a new grid) is solved a second way: a small softmax classifier is <i>trained</i> on the demonstration pairs with real gradient descent, computed live in your browser. This is the "optimization route" the track brief attributes to HRM/TRM-style ARC solvers: demonstrations become training samples, and the system needs a backward pass before it can be evaluated on an unseen task. Compare the mechanism, not just the score.</p>
+      <div class="row">
+        <div class="col">
+          <label>Training steps (gradient descent iterations)</label>
+          <input type="range" id="epochSlider" min="1" max="200" value="40">
+          <div class="pill" id="epochVal">40 steps</div>
+          <label>Learning rate</label>
+          <input type="range" id="lrSlider" min="1" max="50" value="15">
+          <div class="pill" id="lrVal">η = 0.15</div>
+          <button class="btn" id="trainBtn" style="margin-top:10px">▶ Train by gradient descent</button>
+        </div>
+        <div class="col">
+          <div class="statline">
+            <div class="stat"><div class="n" id="gdSteps">0</div><div class="l">gradient steps taken</div></div>
+            <div class="stat"><div class="n" id="gdAcc">–</div><div class="l">test-grid accuracy</div></div>
+          </div>
+          <svg class="chart" id="lossChart" width="380" height="160" viewBox="0 0 380 160"></svg>
+          <div class="legend">Cross-entropy loss over training steps.</div>
+        </div>
+      </div>
+      <table>
+        <tr><th></th><th>Fast-weight memory (Tab 1)</th><th>Gradient descent (this tab)</th></tr>
+        <tr><td>What changes</td><td>Additive state W (recurrent, per-demo)</td><td>Weights of a small network</td></tr>
+        <tr><td>Update rule</td><td>One addition per demonstration</td><td>Many iterative steps, needs a loss + backward pass</td></tr>
+        <tr><td>New unseen task (new π)</td><td>Reset state, re-accumulate instantly</td><td>Retrain from scratch (or fine-tune) — costs steps</td></tr>
+        <tr><td>Failure mode</td><td>Cross-talk when K &gt; D (Tab 2)</td><td>Under/overfitting if steps or η are mis-set</td></tr>
+      </table>
+      <div class="note">This gradient-descent panel is a deliberately tiny <b>toy</b> classifier built for this artifact — it is <i>not</i> a reproduction of HRM or TRM, which use much larger recurrent/recursive transformer blocks, deep supervision, and puzzle-identity embeddings. It exists only to make the mechanism-level contrast (state accumulation vs. iterative weight updates) concrete and live.</div>
+    </div>
+  </section>
+
+  <!-- TAB 4 -->
+  <section id="t4">
+    <div class="card">
+      <h2>Where this shows up in BDH and BDH-CQ <span class="flag reported">REPORTED RESULTS, PRIMARY SOURCES</span></h2>
+
+      <h3>BDH: attention reformulated as Hebbian synaptic memory</h3>
+      <p>Dragon Hatchling (BDH) is Pathway's post-Transformer architecture: a scale-free network of locally-interacting "neuron" units whose attention mechanism is derived from first principles as a Hebbian, synapse-level update rather than a dense query–key–value matrix multiply over all pairs of tokens<sup>[1]</sup>. The paper reports that BDH follows Transformer-like scaling laws and is competitive with GPT-2 at matched parameter counts (10M–1B) on language and translation tasks, while exposing sparse, largely monosemantic neuron activity (on the order of ~5% of neurons active at a time in reported runs) and a scale-free, heavy-tailed connectivity pattern<sup>[1]</sup>. The GPU-friendly formulation (sometimes called BDH-GPU) is built from ReLU/low-rank transformations combined with linear attention — the track brief is explicit that this should <i>not</i> be read as an SSM in the Mamba sense, and this explainer does not make that claim.</p>
+      <p><b>What's actually changing:</b> in BDH, the quantity that plays the role of "recurrent state" is synaptic strength between neuron-particles, updated by activity as the model reads a sequence — the same outer-product/Hebbian mechanism you just ran by hand in Tab 1, just embedded inside a much larger trained network rather than a hand-built toy memory.</p>
+
+      <h3>BDH-CQ: in-context learning with recurrent latent reasoning</h3>
+      <p>BDH-CQ extends this idea into a reasoning system. Its own paper frames it as combining in-context learning with recurrent latent reasoning: inputs shown at inference time continuously update the model's recurrent memory, and the model then iterates in a high-dimensional latent space to answer a query, without generating a verbalized chain of thought<sup>[2]</sup>. On the public ARC-AGI-1 evaluation set, a 150-million-parameter configuration reaches 29.5% pass@2 at a computed inference cost of about $0.0007 per task, which the authors present as a new point on the cost–accuracy Pareto frontier for that benchmark rather than a new accuracy record in isolation<sup>[2][3]</sup>.</p>
+      <p>This is exactly the "counterexample" the track brief describes under Test-Time Adaptation: BDH-CQ is not shown the evaluation task's demonstrations during training, and it performs no parameter update at inference — adaptation happens entirely inside the recurrent state that accumulates as demonstrations are read, mirroring the additive mechanism in Tabs 1–2, not the gradient-based mechanism in Tab 3.</p>
+
+      <h3>The optimization route: HRM and TRM</h3>
+      <p>The Hierarchical Reasoning Model (HRM) uses two coupled recurrent modules — a slow "planning" module and a fast "detail" module — trained end-to-end with roughly 1,000 examples per task family, and its paper reports that it outperforms much larger chain-of-thought models on ARC-AGI and on Sudoku/maze benchmarks despite using only about 27 million parameters<sup>[4]</sup>. The Tiny Recursive Model (TRM) simplifies this to a single small weight-tied network that recursively refines a latent state and an answer over a fixed number of steps; its paper reports 45% test accuracy on ARC-AGI-1 and 8% on ARC-AGI-2 with about 7 million parameters, exceeding several much larger LLMs on the same benchmark<sup>[5]</sup>. A related 2025 paper studies test-time adaptation strategies for TRM directly — comparing full fine-tuning, embeddings-only tuning, and LoRA-style adaptation on the ARC-AGI-1 checkpoint — which is squarely an optimization-route approach: every strategy it compares still requires a gradient computed against the specific evaluation task<sup>[6]</sup>.</p>
+
+      <h3>Evidence discipline</h3>
+      <table>
+        <tr><th>Claim</th><th>Evidence type</th></tr>
+        <tr><td>BDH matches GPT-2 at matched parameter count; Hebbian/synaptic attention formulation</td><td>Peer-reviewed-style arXiv preprint, developer-reported<sup>[1]</sup></td></tr>
+        <tr><td>BDH-CQ: 29.5% pass@2 on ARC-AGI-1 at $0.0007/task</td><td>Developer-reported benchmark; an independent black-box audit is reported by third parties to have reproduced the score, which is a partial independent check, not a full replication of methodology<sup>[2][3]</sup></td></tr>
+        <tr><td>HRM: ~27M params outperforms larger CoT models on ARC-AGI</td><td>Developer-reported benchmark<sup>[4]</sup>; a later mechanistic-analysis paper reports failure modes on trivially simple puzzles, which this explainer treats as an open limitation rather than omitting</td></tr>
+        <tr><td>TRM: 45%/8% on ARC-AGI-1/2 at 7M params</td><td>Developer-reported benchmark, 1st-place ARC Prize 2025 paper award<sup>[5]</sup></td></tr>
+      </table>
+      <div class="note">Nothing above is reproduced live in this artifact — BDH and BDH-CQ are not runnable by teams under the track's own rules. All numbers here are cited from the primary papers listed in Tab 6, quoted only in paraphrase, and are clearly separated from the live toy computation in Tabs 1–3.</div>
+    </div>
+  </section>
+
+  <!-- TAB 5 -->
+  <section id="t5">
+    <div class="card">
+      <h2>Explain it back</h2>
+      <p style="color:var(--muted);font-size:0.88rem">Before moving on, write (for yourself — nothing is uploaded) one or two sentences answering: <i>why does the fast-weight memory in Tab 1 count as "test-time adaptation" even though no weight in any neural network ever changes?</i> Then check your answer against the model answer below.</p>
+      <textarea placeholder="Type your explanation here…"></textarea>
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;color:var(--accent2);">Reveal a model answer</summary>
+        <p style="margin-top:8px;">Because "adaptation" doesn't require weights to move — it only requires the system's <i>output</i> to change in response to new information. The matrix W in Tab 1 is not a trained parameter; it's part of the recurrent state, reset for every new task and rebuilt from that task's own demonstrations. The rule (π) the system ends up implementing is different every time you change the demonstrations, without a single gradient step — which is precisely what "adaptation happening in recurrent state rather than in weights" means in the BDH-CQ paper.</p>
+      </details>
+      <h3>Sixty-second self-test</h3>
+      <p style="color:var(--muted);font-size:0.88rem">Set K=6, D=4, full coverage, cyclic rule in Tab 1. Predict — before clicking "Learn" — whether accuracy will be closer to 100% or noticeably lower, and why. Then run it and see if you were right. If you predicted "noticeably lower" because K &gt; D, you've correctly applied the capacity limit from Tab 2.</p>
+    </div>
+  </section>
+
+  <!-- TAB 6 -->
+  <section id="t6">
+    <div class="card">
+      <h2>Limitations, scope, and what this artifact is not</h2>
+      <ul>
+        <li>The Tab 1–3 memory and classifier are small, hand-built toy systems chosen to make one mechanism visible. They are <b>not</b> BDH, BDH-CQ, HRM, or TRM, and are not claimed to reproduce their numbers.</li>
+        <li>Retrieval in Tab 1 uses nearest-neighbor decoding against the known key set for readability. Real fast-weight / linear-attention systems typically decode through a learned readout, not an explicit nearest-key search — this is a pedagogical simplification, stated here rather than hidden.</li>
+        <li>The capacity sweep in Tab 2 uses uniformly random keys, not learned or structured embeddings; real systems can partially mitigate cross-talk through learned key structure, which this toy does not model.</li>
+        <li>BDH-CQ's ARC-AGI-1 result (29.5% pass@2) is a cost-efficiency frontier point, not the highest accuracy available on that benchmark — larger, more expensive systems score higher, as the primary paper itself states.</li>
+        <li>HRM's originally reported advantage has been partly contested by later mechanistic-analysis work showing failures on trivially simple puzzles under certain conditions; this explainer cites that critique rather than omitting it.</li>
+      </ul>
+      <h2>Primary sources (2022–2026)</h2>
+      <ol style="font-size:0.88rem;">
+        <li id="src1">A. Kosowski, P. Uznański, J. Chorowski, Z. Stamirowska, M. Bartoszkiewicz. <i>The Dragon Hatchling: The Missing Link between the Transformer and Models of the Brain.</i> arXiv:2509.26507, 2025.</li>
+        <li id="src2">Pathway Research. <i>BDH-CQ: In-Context Learning with Recurrent Latent Reasoning.</i> arXiv:2608.09888, 2026.</li>
+        <li id="src3">Pathway. <i>Pathway's 150M-Parameter Model Breaks the ARC-AGI-1 Cost-Efficiency Frontier</i> (company research blog accompanying [2]), 2026.</li>
+        <li id="src4">G. Wang, J. Li, Y. Sun, X. Chen, C. Liu, Y. Wu, M. Lu, S. Song, Y. Abbasi-Yadkori. <i>Hierarchical Reasoning Model.</i> arXiv:2506.21734, 2025.</li>
+        <li id="src5">A. Jolicoeur-Martineau. <i>Less is More: Recursive Reasoning with Tiny Networks.</i> arXiv:2510.04871, 2025. (ARC Prize 2025 Paper Award, 1st place.)</li>
+        <li id="src6"><i>Test-Time Adaptation of Tiny Recursive Models.</i> arXiv:2511.02886, 2025.</li>
+      </ol>
+      <p style="font-size:0.82rem;color:var(--muted)">Additional background consulted: ARC Prize 2024 Technical Report, arXiv:2412.04604 (on test-time training as the dominant ARC-AGI paradigm); Chollet et al., ARC-AGI-2 materials. Full license/provenance record and AI-assistance disclosure are in the accompanying README and AI_DISCLOSURE files in the submission package.</p>
+    </div>
+  </section>
+
+  <footer>
+    DataForge 2026 × Pathway Track submission · Team NEXORA · Built as a self-contained static page (no build step, no external API calls, no sign-in). Source: see repository README.
+  </footer>
+</div>
+
+<script>
+// ---------- utility: seeded PRNG ----------
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  }
+}
+function randVec(D,rng){
+  let v=[]; for(let i=0;i<D;i++) v.push(rng()*2-1);
+  let n=Math.sqrt(v.reduce((s,x)=>s+x*x,0))||1;
+  return v.map(x=>x/n);
+}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s;}
+function outer(v,k){ // returns D x D
+  let M=[]; for(let i=0;i<v.length;i++){let row=[];for(let j=0;j<k.length;j++)row.push(v[i]*k[j]);M.push(row);} return M;
+}
+function addMat(A,B){for(let i=0;i<A.length;i++)for(let j=0;j<A[0].length;j++)A[i][j]+=B[i][j]; return A;}
+function zeros(D){let M=[];for(let i=0;i<D;i++)M.push(new Array(D).fill(0));return M;}
+function matVec(M,v){let out=[];for(let i=0;i<M.length;i++){let s=0;for(let j=0;j<v.length;j++)s+=M[i][j]*v[j];out.push(s);}return out;}
+
+function permutation(K,rule,rng){
+  let p=[...Array(K).keys()];
+  if(rule==='cyclic') return p.map(i=>(i+1)%K);
+  if(rule==='swap01'){ if(K>=2){[p[0],p[1]]=[p[1],p[0]];} return p; }
+  if(rule==='reverse') return p.map(i=>K-1-i);
+  if(rule==='random'){ let a=[...p]; for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+  return p;
+}
+
+const palette=['#f0577c','#39d6b0','#7c6cf0','#f0b24a','#57c9f0','#c39bf0','#e8e85c','#f08a57','#8ef057','#f057d6'];
+
+// ---------- shared world state ----------
+let state={D:4,K:4,M:4,seed:42,keys:[],perm:[],W:null,steps:0};
+
+function rebuildKeys(){
+  const rng=mulberry32(state.seed);
+  state.keys=[]; for(let i=0;i<state.K;i++) state.keys.push(randVec(state.D,rng));
+  state.perm=permutation(state.K, document.getElementById('ruleSelect').value, mulberry32(state.seed+999));
+  state.W=zeros(state.D); state.steps=0;
+  document.getElementById('stepCount').textContent='0';
+  document.getElementById('accStat').textContent='–';
+  document.getElementById('learnLog').textContent='';
+  renderMatrix();
+}
+
+function nearestColor(vec){
+  let best=-1,bestScore=-Infinity;
+  for(let i=0;i<state.keys.length;i++){ const s=dot(vec,state.keys[i]); if(s>bestScore){bestScore=s;best=i;} }
+  return best;
+}
+
+function renderMatrix(){
+  const el=document.getElementById('matrixVis');
+  const D=state.D; let maxAbs=0.0001;
+  for(let i=0;i<D;i++)for(let j=0;j<D;j++) maxAbs=Math.max(maxAbs,Math.abs(state.W[i][j]));
+  let html='<div style="display:grid;grid-template-columns:repeat('+D+',28px);gap:2px;">';
+  for(let i=0;i<D;i++)for(let j=0;j<D;j++){
+    const v=state.W[i][j]; const t=Math.min(1,Math.abs(v)/maxAbs);
+    const color = v>=0 ? `rgba(57,214,176,${0.15+0.8*t})` : `rgba(240,87,124,${0.15+0.8*t})`;
+    html+=`<div style="width:28px;height:28px;background:${color};border-radius:4px;"></div>`;
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function learnStep(){
+  const M=state.M;
+  let log=[];
+  for(let i=0;i<M;i++){
+    const v=state.keys[state.perm[i]], k=state.keys[i];
+    state.W=addMat(state.W, outer(v,k));
+    state.steps++;
+    log.push(`add #${state.steps}: color ${i} → color ${state.perm[i]}`);
+  }
+  document.getElementById('stepCount').textContent=state.steps;
+  document.getElementById('learnLog').innerHTML=log.map(l=>`<div>${l}</div>`).join('');
+  renderMatrix();
+  runTestGrid(true);
+}
+
+function drawGrid(elId,indices,markCorrect,correctIndices){
+  const el=document.getElementById(elId); el.innerHTML='';
+  indices.forEach((idx,i)=>{
+    const d=document.createElement('div');
+    d.className='cell';
+    d.style.background=palette[idx%palette.length];
+    d.textContent=idx;
+    if(markCorrect){
+      d.classList.add(idx===correctIndices[i] ? 'right':'wrong');
+    }
+    el.appendChild(d);
+  });
+}
+
+let currentTestInput=[];
+function runTestGrid(reuse){
+  const rng=mulberry32(state.seed+ (reuse?7:Date.now()%1000));
+  if(!reuse || currentTestInput.length===0){
+    currentTestInput=[]; for(let i=0;i<16;i++) currentTestInput.push(Math.floor(rng()*state.K));
+  }
+  const truth=currentTestInput.map(idx=>state.perm[idx]);
+  const pred=currentTestInput.map(idx=>{
+    const vpred=matVec(state.W,state.keys[idx]);
+    return nearestColor(vpred);
+  });
+  drawGrid('gridIn',currentTestInput,false,null);
+  drawGrid('gridPred',pred,true,truth);
+  drawGrid('gridTruth',truth,false,null);
+  const acc=pred.filter((p,i)=>p===truth[i]).length/pred.length*100;
+  document.getElementById('accStat').textContent=acc.toFixed(0)+'%';
+}
+
+// ---------- Tab 1 wiring ----------
+function syncLabels(){
+  document.getElementById('kVal').textContent='K = '+state.K;
+  document.getElementById('dVal').textContent='D = '+state.D;
+  document.getElementById('mVal').textContent='M = '+state.M+' of '+state.K;
+}
+document.getElementById('kSlider').addEventListener('input',e=>{
+  state.K=+e.target.value;
+  const m=document.getElementById('mSlider'); m.max=state.K; if(+m.value>state.K) m.value=state.K;
+  state.M=+m.value; syncLabels(); rebuildKeys();
+});
+document.getElementById('dSlider').addEventListener('input',e=>{ state.D=+e.target.value; syncLabels(); rebuildKeys(); });
+document.getElementById('mSlider').addEventListener('input',e=>{ state.M=+e.target.value; syncLabels(); });
+document.getElementById('ruleSelect').addEventListener('change',rebuildKeys);
+document.getElementById('learnBtn').addEventListener('click',learnStep);
+document.getElementById('testBtn').addEventListener('click',()=>runTestGrid(false));
+document.getElementById('resetBtn').addEventListener('click',()=>{ state.seed=Math.floor(Math.random()*100000); rebuildKeys(); currentTestInput=[]; runTestGrid(false); });
+
+// ---------- Tab 2: capacity sweep ----------
+document.getElementById('dSweep').addEventListener('input',e=>{document.getElementById('dSweepVal').textContent='D = '+e.target.value;});
+document.getElementById('sweepBtn').addEventListener('click',()=>{
+  const D=+document.getElementById('dSweep').value;
+  const Ks=[D, D+Math.ceil(D/2), D*2, Math.ceil(D*2.5), D*3];
+  const results=Ks.map(K=>{
+    let total=0,trials=30;
+    for(let t=0;t<trials;t++){
+      const rng=mulberry32(1000*K+t);
+      const keys=[]; for(let i=0;i<K;i++) keys.push(randVec(D,rng));
+      const perm=permutation(K,'random',mulberry32(2000*K+t));
+      let W=zeros(D);
+      for(let i=0;i<K;i++) W=addMat(W,outer(keys[perm[i]],keys[i]));
+      let correct=0;
+      for(let i=0;i<K;i++){
+        const vpred=matVec(W,keys[i]);
+        let best=-1,bs=-Infinity;
+        for(let j=0;j<K;j++){const s=dot(vpred,keys[j]); if(s>bs){bs=s;best=j;}}
+        if(best===perm[i]) correct++;
+      }
+      total+=correct/K;
+    }
+    return {K, acc: total/trials*100};
+  });
+  drawSweepChart(results,D);
+});
+function drawSweepChart(results,D){
+  const svg=document.getElementById('sweepChart');
+  svg.innerHTML='';
+  const W=880,H=220,pad=40;
+  const barW=(W-2*pad)/results.length*0.6;
+  const gap=(W-2*pad)/results.length;
+  results.forEach((r,i)=>{
+    const x=pad+i*gap+ (gap-barW)/2;
+    const h=(r.acc/100)*(H-2*pad);
+    const y=H-pad-h;
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',x); rect.setAttribute('y',y);
+    rect.setAttribute('width',barW); rect.setAttribute('height',h);
+    rect.setAttribute('fill', r.K<=D ? '#39d6b0' : (r.K<=D*1.5? '#f0b24a':'#f0577c'));
+    rect.setAttribute('rx',4);
+    svg.appendChild(rect);
+    const label=document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x',x+barW/2); label.setAttribute('y',H-pad+16);
+    label.setAttribute('fill','#9aa1c2'); label.setAttribute('font-size','11'); label.setAttribute('text-anchor','middle');
+    label.textContent='K='+r.K;
+    svg.appendChild(label);
+    const pct=document.createElementNS('http://www.w3.org/2000/svg','text');
+    pct.setAttribute('x',x+barW/2); pct.setAttribute('y',y-6);
+    pct.setAttribute('fill','#eef0f8'); pct.setAttribute('font-size','12'); pct.setAttribute('text-anchor','middle');
+    pct.textContent=r.acc.toFixed(0)+'%';
+    svg.appendChild(pct);
+  });
+  const axis=document.createElementNS('http://www.w3.org/2000/svg','line');
+  axis.setAttribute('x1',pad); axis.setAttribute('y1',H-pad); axis.setAttribute('x2',W-pad); axis.setAttribute('y2',H-pad);
+  axis.setAttribute('stroke','#2b3050');
+  svg.appendChild(axis);
+}
+
+// ---------- Tab 3: gradient descent classifier ----------
+document.getElementById('epochSlider').addEventListener('input',e=>document.getElementById('epochVal').textContent=e.target.value+' steps');
+document.getElementById('lrSlider').addEventListener('input',e=>document.getElementById('lrVal').textContent='η = '+(e.target.value/100).toFixed(2));
+document.getElementById('trainBtn').addEventListener('click',()=>{
+  const steps=+document.getElementById('epochSlider').value;
+  const lr=+document.getElementById('lrSlider').value/100;
+  const D=state.D,K=state.K,M=state.M;
+  // training data: (key vector -> one-hot class perm[i]) for i in 0..M-1
+  let Wc=[]; for(let i=0;i<K;i++){let row=[];for(let j=0;j<D;j++)row.push((Math.random()-0.5)*0.1);Wc.push(row);} // KxD weight matrix
+  const losses=[];
+  for(let s=0;s<steps;s++){
+    let grad=Wc.map(row=>row.map(()=>0));
+    let loss=0;
+    for(let i=0;i<M;i++){
+      const x=state.keys[i]; const y=state.perm[i];
+      const logits=Wc.map(row=>dot(row,x));
+      const maxL=Math.max(...logits);
+      const exps=logits.map(l=>Math.exp(l-maxL));
+      const sumE=exps.reduce((a,b)=>a+b,0);
+      const probs=exps.map(e=>e/sumE);
+      loss += -Math.log(Math.max(probs[y],1e-9));
+      for(let c=0;c<K;c++){
+        const err=probs[c]-(c===y?1:0);
+        for(let d=0;d<D;d++) grad[c][d]+=err*x[d];
+      }
+    }
+    for(let c=0;c<K;c++) for(let d=0;d<D;d++) Wc[c][d]-=lr*grad[c][d]/M;
+    losses.push(loss/M);
+  }
+  document.getElementById('gdSteps').textContent=steps;
+  drawLossChart(losses);
+  // evaluate on same test grid as Tab1 if present, else generate
+  if(currentTestInput.length===0){ const rng=mulberry32(state.seed); for(let i=0;i<16;i++) currentTestInput.push(Math.floor(rng()*state.K)); }
+  const truth=currentTestInput.map(idx=>state.perm[idx]);
+  const pred=currentTestInput.map(idx=>{
+    const x=state.keys[idx];
+    const logits=Wc.map(row=>dot(row,x));
+    let best=0,bv=-Infinity; logits.forEach((l,i)=>{if(l>bv){bv=l;best=i;}});
+    return best;
+  });
+  const acc=pred.filter((p,i)=>p===truth[i]).length/pred.length*100;
+  document.getElementById('gdAcc').textContent=acc.toFixed(0)+'%';
+});
+function drawLossChart(losses){
+  const svg=document.getElementById('lossChart'); svg.innerHTML='';
+  const W=380,H=160,pad=30;
+  const maxL=Math.max(...losses,0.01);
+  const pts=losses.map((l,i)=>{
+    const x=pad+(i/(losses.length-1||1))*(W-2*pad);
+    const y=H-pad-(l/maxL)*(H-2*pad);
+    return x+','+y;
+  }).join(' ');
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('points',pts); poly.setAttribute('fill','none'); poly.setAttribute('stroke','#7c6cf0'); poly.setAttribute('stroke-width','2');
+  svg.appendChild(poly);
+  const axis=document.createElementNS('http://www.w3.org/2000/svg','line');
+  axis.setAttribute('x1',pad); axis.setAttribute('y1',H-pad); axis.setAttribute('x2',W-pad); axis.setAttribute('y2',H-pad);
+  axis.setAttribute('stroke','#2b3050');
+  svg.appendChild(axis);
+}
+
+// ---------- nav ----------
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ---------- boot: preset already running ----------
+document.getElementById('mSlider').max=state.K;
+syncLabels();
+rebuildKeys();
+learnStep();
+</script>
+</body>
+</html>
