@@ -40,7 +40,7 @@ Single static HTML file, six tabs, no external dependencies, no server:
 
 **Nothing is animated for effect.** The matrix heatmap in Tab 1, the bar chart in Tab 2, and the loss curve in Tab 3 are all direct renders of numbers computed in that page load, in your browser, from the sliders you set.
 
-### Role of every major component (for judges' live-defense questions)
+### Role of every major component
 
 - `mulberry32` — a small seeded PRNG so keys are reproducible for a given seed and regenerated on "Reshuffle keys."
 - `state.keys` — K unit vectors in R^D, standing in for "colors." These are the only stochastic input; everything downstream is deterministic linear algebra.
